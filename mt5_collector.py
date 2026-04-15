@@ -1,54 +1,82 @@
-import MetaTrader5 as mt5
-import pandas as pd
+import os
 import json
-from datetime import datetime
+import MetaTrader5 as mt5
+from datetime import datetime, timedelta
 
 # ---------------------------
-# CONNECT TO MT5
+# INIT MT5
 # ---------------------------
 if not mt5.initialize():
-    print("MT5 initialize() failed")
-    quit()
-
-symbol = "XAUUSD"
-timeframe = mt5.TIMEFRAME_H1
-bars = 200
-
-# ---------------------------
-# GET DATA
-# ---------------------------
-rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, bars)
-
-if rates is None:
-    print("Failed to get data")
-    mt5.shutdown()
+    print("MT5 initialize failed:", mt5.last_error())
     quit()
 
 # ---------------------------
-# CONVERT TO DATAFRAME
+# ACCOUNT INFO
 # ---------------------------
-df = pd.DataFrame(rates)
-df["time"] = pd.to_datetime(df["time"], unit="s")
+def get_account_info():
+    acc = mt5.account_info()
 
-# Keep only needed columns
-df = df[["time", "open", "high", "low", "close"]]
+    if acc is None:
+        return {
+            "error": "no_account"
+        }
 
-# ---------------------------
-# CONVERT TO JSON FORMAT
-# ---------------------------
-data = df.to_dict(orient="records")
-
-# ---------------------------
-# SAVE TO DASHBOARD FILE
-# ---------------------------
-output_path = "docs/data/dashboard_data.json"
-
-with open(output_path, "w") as f:
-    json.dump(data, f, default=str, indent=2)
-
-print(f"Saved {len(data)} bars to {output_path}")
+    return {
+        "login": acc.login,
+        "balance": float(acc.balance),
+        "equity": float(acc.equity),
+        "profit": float(acc.profit),
+        "currency": acc.currency
+    }
 
 # ---------------------------
-# CLOSE MT5 CONNECTION
+# FULL HISTORY (ALL TIME)
+# ---------------------------
+def get_history():
+    # VERY EARLY START DATE (covers almost all accounts)
+    start = datetime(2025, 1, 1)
+    end = datetime.now()
+
+    deals = mt5.history_deals_get(start, end)
+
+    if deals is None:
+        return []
+
+    return [
+        {
+            "ticket": d.ticket,
+            "symbol": d.symbol,
+            "type": d.type,
+            "volume": d.volume,
+            "price": d.price,
+            "profit": float(d.profit),
+            "time": datetime.fromtimestamp(d.time).isoformat()
+        }
+        for d in deals
+    ]
+
+# ---------------------------
+# BUILD OUTPUT
+# ---------------------------
+output = {
+    "timestamp": datetime.now().isoformat(),
+    "account": get_account_info(),
+    "history": get_history()
+}
+
+# ---------------------------
+# SAVE JSON
+# ---------------------------
+os.makedirs("docs/data", exist_ok=True)
+
+file_path = "docs/data/dashboard_data.json"
+
+with open(file_path, "w") as f:
+    json.dump(output, f, indent=2)
+
+print("✅ Dashboard data updated:", file_path)
+
+# ---------------------------
+# SHUTDOWN MT5
 # ---------------------------
 mt5.shutdown()

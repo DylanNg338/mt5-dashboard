@@ -1,95 +1,93 @@
-let dashboardData = null;
+function calculateAnalytics(history) {
 
-async function loadData() {
-    try {
-        const response = await fetch('data/dashboard_data.json?' + new Date().getTime());
-        dashboardData = await response.json();
-        updateDashboard();
-    } catch (error) {
-        console.error('Error loading data:', error);
-    }
-}
+    let totalProfit = 0;
 
-function updateDashboard() {
-    if (!dashboardData) return;
-    
-    // Update timestamp
-    const lastUpdate = new Date(dashboardData.timestamp);
-    document.getElementById('last-update').textContent = 
-        `Last Update: ${lastUpdate.toLocaleString()}`;
-    
-    // Update account info
-    const account = dashboardData.account;
-    document.getElementById('balance').textContent = 
-        `$${account.balance.toFixed(2)}`;
-    document.getElementById('equity').textContent = 
-        `$${account.equity.toFixed(2)}`;
-    
-    const profitEl = document.getElementById('profit');
-    profitEl.textContent = `$${account.profit.toFixed(2)}`;
-    profitEl.className = 'metric-value ' + 
-        (account.profit >= 0 ? 'positive' : 'negative');
-    
-    document.getElementById('margin-level').textContent = 
-        `${account.margin_level ? account.margin_level.toFixed(2) : '0'}%`;
-    
-    // Update positions table
-    updatePositionsTable();
-    
-    // Update charts
-    updateCharts();
-}
+    let wins = [];
+    let losses = [];
 
-function updatePositionsTable() {
-    const positions = dashboardData.positions;
-    const tableDiv = document.getElementById('positions-table');
-    
-    if (positions.length === 0) {
-        tableDiv.innerHTML = '<p>No open positions</p>';
-        return;
-    }
-    
-    let html = `
-        <table>
-            <thead>
-                <tr>
-                    <th>Ticket</th>
-                    <th>Symbol</th>
-                    <th>Type</th>
-                    <th>Volume</th>
-                    <th>Open Price</th>
-                    <th>Current Price</th>
-                    <th>SL</th>
-                    <th>TP</th>
-                    <th>Profit</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-    
-    positions.forEach(pos => {
-        const profitClass = pos.profit >= 0 ? 'profit-positive' : 'profit-negative';
-        html += `
-            <tr>
-                <td>${pos.ticket}</td>
-                <td>${pos.symbol}</td>
-                <td>${pos.type}</td>
-                <td>${pos.volume}</td>
-                <td>${pos.price_open.toFixed(5)}</td>
-                <td>${pos.price_current.toFixed(5)}</td>
-                <td>${pos.sl ? pos.sl.toFixed(5) : '-'}</td>
-                <td>${pos.tp ? pos.tp.toFixed(5) : '-'}</td>
-                <td class="${profitClass}">$${pos.profit.toFixed(2)}</td>
-            </tr>
-        `;
+    let totalDuration = 0;
+    let tradeCount = 0;
+
+    history.forEach(t => {
+
+        const profit = Number(t.profit || 0);
+        const type = t.type;
+
+        // ONLY TRADES
+        if (type === 0 || type === 1) {
+
+            totalProfit += profit;
+
+            if (profit > 0) wins.push(profit);
+            if (profit < 0) losses.push(profit);
+
+            // -----------------------------
+            // TRADE DURATION FIX
+            // -----------------------------
+            if (t.time && t.time_close) {
+
+                const open = new Date(t.time);
+                const close = new Date(t.time_close);
+
+                const duration = (close - open) / 1000; // seconds
+
+                if (duration > 0) {
+                    totalDuration += duration;
+                    tradeCount++;
+                }
+            }
+        }
     });
-    
-    html += '</tbody></table>';
-    tableDiv.innerHTML = html;
+
+    const avgProfit = wins.length
+        ? wins.reduce((a, b) => a + b, 0) / wins.length
+        : 0;
+
+    const avgLoss = losses.length
+        ? losses.reduce((a, b) => a + b, 0) / losses.length
+        : 0;
+
+    const avgDuration = tradeCount
+        ? totalDuration / tradeCount
+        : 0;
+
+    return {
+        totalProfit,
+        avgProfit,
+        avgLoss,
+        avgDuration
+    };
 }
 
-// Auto-refresh every 30 seconds
-setInterval(loadData, 30000);
+// -----------------------------
+// LOAD DATA
+// -----------------------------
+fetch("data/dashboard_data.json?t=" + new Date().getTime())
+  .then(res => res.json())
+  .then(json => {
 
-// Initial load
-loadData();
+    const account = json.account || {};
+    const history = json.history || [];
+
+    const stats = calculateAnalytics(history);
+
+    // UI
+    document.getElementById("balance").textContent =
+        (account.balance ?? 0).toFixed(2);
+
+    document.getElementById("profit").textContent =
+        stats.totalProfit.toFixed(2);
+
+    document.getElementById("avg-profit").textContent =
+        stats.avgProfit.toFixed(2);
+
+    document.getElementById("avg-loss").textContent =
+        stats.avgLoss.toFixed(2);
+
+    document.getElementById("avg-duration").textContent =
+        (stats.avgDuration / 60).toFixed(1) + " min";
+
+    // CHART
+    buildCharts(history);
+  })
+  .catch(err => console.error(err));

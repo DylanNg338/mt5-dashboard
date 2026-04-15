@@ -1,65 +1,40 @@
-let charts = {};
+function buildCharts(monthly) {
 
-function updateCharts() {
-    const symbols = dashboardData.symbols;
-    
-    Object.keys(symbols).forEach(symbol => {
-        updateChart(symbol, symbols[symbol]);
+    if (!monthly || Object.keys(monthly).length === 0) {
+        console.warn("No monthly data for charts");
+        return;
+    }
+
+    const months = Object.keys(monthly).sort();
+
+    // ✅ USE TRADE PROFIT (clean performance)
+    const values = months.map(m => monthly[m].tradeProfit);
+
+    console.log("Chart Months:", months);
+    console.log("Chart Values:", values);
+
+    const ctx = document.getElementById("chart-xauusd");
+
+    if (!ctx) {
+        console.error("Chart canvas not found!");
+        return;
+    }
+
+    new Chart(ctx, {
+        type: "bar",
+        data: {
+            labels: months,
+            datasets: [{
+                label: "Monthly Trading Profit",
+                data: values,
+                backgroundColor: "rgba(75, 192, 192, 0.6)"
+            }]
+        },
+        options: {
+            responsive: true
+        }
     });
 }
 
-function updateChart(symbol, data) {
-    if (!data || data.length === 0) return;
-    
-    const chartId = `chart-${symbol.toLowerCase()}`;
-    const ctx = document.getElementById(chartId);
-    if (!ctx) return;
-    
-    const chartData = {
-        labels: data.map(d => new Date(d.time)),
-        datasets: [{
-            label: 'Close Price',
-            data: data.map(d => d.close),
-            borderColor: '#667eea',
-            backgroundColor: 'rgba(102, 126, 234, 0.1)',
-            borderWidth: 2,
-            fill: true,
-            tension: 0.4
-        }]
-    };
-    
-    const config = {
-        type: 'line',
-        data: chartData,
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    display: false
-                }
-            },
-            scales: {
-                x: {
-                    type: 'time',
-                    time: {
-                        unit: 'minute',
-                        displayFormats: {
-                            minute: 'HH:mm'
-                        }
-                    }
-                },
-                y: {
-                    beginAtZero: false
-                }
-            }
-        }
-    };
-    
-    if (charts[symbol]) {
-        charts[symbol].data = chartData;
-        charts[symbol].update();
-    } else {
-        charts[symbol] = new Chart(ctx, config);
-    }
-}
+// expose globally
+window.buildCharts = buildCharts;
