@@ -1,10 +1,10 @@
 {
-  "timestamp": "2026-04-16T13:26:53.404422",
+  "timestamp": "2026-04-16T13:27:55.780074",
   "account": {
     "login": 51340851,
     "balance": 104.39,
-    "equity": 105.94,
-    "profit": 1.55,
+    "equity": 103.16,
+    "profit": -1.23,
     "currency": "SGD"
   },
   "history": [
